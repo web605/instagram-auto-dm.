@@ -1,32 +1,73 @@
 name: Instagram auto-DM
 
+# How it keeps running every 5 minutes, even when GitHub's own timer is slow:
+# one run checks comments every 5 minutes for ~5.5 hours, then starts the next
+# run itself. The hourly schedule below only restarts it if the chain ever stops.
+
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes (GitHub may delay runs a little)
-  workflow_dispatch:        # adds a "Run workflow" button for manual runs
+    - cron: "17 * * * *"    # safety restart, once an hour
+  workflow_dispatch:        # "Run workflow" button (and how the chain restarts itself)
     inputs:
       dry_run:
         description: "Dry run (only show who would get a DM, send nothing)"
         type: boolean
         default: true
 
+permissions:
+  contents: read
+  actions: write            # lets the run start the next run
+
 concurrency:
-  group: instagram-auto-dm   # never run two checks at the same time
+  group: instagram-auto-dm  # only one run at a time
   cancel-in-progress: false
 
 jobs:
   check-comments:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Check comments and send DMs
+
+      - name: Dry run (send nothing)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
         env:
           COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
           COMPOSIO_CONNECTED_ACCOUNT: ${{ secrets.COMPOSIO_CONNECTED_ACCOUNT }}
           COMPOSIO_USER_ID: ${{ secrets.COMPOSIO_USER_ID }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          DRY_RUN: "true"
         run: python auto_dm.py
+
+      - name: Check comments every 5 minutes (~5.5 hours)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          COMPOSIO_CONNECTED_ACCOUNT: ${{ secrets.COMPOSIO_CONNECTED_ACCOUNT }}
+          COMPOSIO_USER_ID: ${{ secrets.COMPOSIO_USER_ID }}
+          DRY_RUN: "false"
+        run: |
+          end=$((SECONDS + 330*60))
+          fails=0
+          while [ $SECONDS -lt $end ]; do
+            echo "=== Check at $(date -u '+%H:%M UTC') ==="
+            if python auto_dm.py; then
+              fails=0
+            else
+              fails=$((fails + 1))
+              echo "Check failed ($fails in a row)"
+              if [ $fails -ge 3 ]; then
+                echo "3 failures in a row - stopping so GitHub emails you."
+                exit 1
+              fi
+            fi
+            sleep 300
+          done
+
+      - name: Start the next run
+        if: ${{ success() && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run auto-dm.yml --ref main -f dry_run=false
