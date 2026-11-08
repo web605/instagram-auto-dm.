@@ -1,0 +1,32 @@
+name: Instagram auto-DM
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (GitHub may delay runs a little)
+  workflow_dispatch:        # adds a "Run workflow" button for manual runs
+    inputs:
+      dry_run:
+        description: "Dry run (only show who would get a DM, send nothing)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: instagram-auto-dm   # never run two checks at the same time
+  cancel-in-progress: false
+
+jobs:
+  check-comments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check comments and send DMs
+        env:
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          COMPOSIO_CONNECTED_ACCOUNT: ${{ secrets.COMPOSIO_CONNECTED_ACCOUNT }}
+          COMPOSIO_USER_ID: ${{ secrets.COMPOSIO_USER_ID }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: python auto_dm.py
