@@ -2,7 +2,7 @@
 Instagram comment -> DM automation for @the.school.fest, via Composio.
 
 Every run:
-  1. Reads comments on the watched reel.
+  1. Finds all your reels (old and new) and reads their comments.
   2. Picks comments containing the keyword that we have not replied to yet.
   3. Sends each one a private-reply DM with the link.
   4. Posts the public "Sent! Check your DMs" reply under the comment.
@@ -23,17 +23,33 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-# ---------- Settings (change these for a new reel) ----------
-MEDIA_IDS = os.environ.get("MEDIA_IDS", "18095984435689718").split(",")
-KEYWORD = os.environ.get("KEYWORD", "school").lower()
-OWN_USERNAME = "the.school.fest"
-DM_TEXT = (
-    "Hi! 👋 Thanks for commenting 🎓\n"
-    "Here’s your link: https://theschoolfest.com/blog/questions-to-ask-schools\n"
-    "📅 The School Fest · 5–6 Dec · Activatrium, Satellite Road, Ahmedabad"
+# ---------- Settings ----------
+# Every reel on the account is watched automatically - old ones and new ones.
+# No need to edit anything when you post a new reel.
+KEYWORD = "school"
+REELS_ONLY = True        # set to False to also watch normal posts/carousels
+MAX_REELS = 50           # how many of your most recent reels to watch
+
+# DM sent for every reel (unless the reel has its own message below)
+DEFAULT_DM = (
+    "Hi! Here's your link to The School Fest 🎉\n"
+    "https://theschoolfest.com/\n"
+    "5–6 Dec, Stratum @ Venus Grounds, Ahmedabad. See you there!"
 )
+
+# Optional: a different DM for specific reels (media ID -> message)
+CUSTOM_DM = {
+    # "School chunna hai? Group chat nahi..." (6 Nov) keeps its blog link
+    "18095984435689718": (
+        "Hi! 👋 Thanks for commenting 🎓\n"
+        "Here’s your link: https://theschoolfest.com/blog/questions-to-ask-schools\n"
+        "📅 The School Fest · 5–6 Dec · Activatrium, Satellite Road, Ahmedabad"
+    ),
+}
+
+OWN_USERNAME = "the.school.fest"
 PUBLIC_REPLY = "Sent! Check your DMs 📩"
-# -------------------------------------------------------------
+# ------------------------------
 
 GRAPH = "https://graph.instagram.com/v21.0"
 PROXY_URL = "https://backend.composio.dev/api/v3.1/tools/execute/proxy"
@@ -80,6 +96,28 @@ def proxy(method, endpoint, body=None, query=None):
     return status, data
 
 
+def fetch_reels():
+    """Most recent reels on the account (newest first), up to MAX_REELS."""
+    found = []
+    status, data = proxy(
+        "GET", f"{GRAPH}/me/media",
+        query={"fields": "id,media_product_type,comments_count,permalink", "limit": "50"},
+    )
+    while True:
+        if status != 200:
+            raise RuntimeError(f"Could not list your posts: {status} {data}")
+        for m in data.get("data", []):
+            if REELS_ONLY and m.get("media_product_type") != "REELS":
+                continue
+            found.append(m)
+            if len(found) >= MAX_REELS:
+                return found
+        next_url = (data.get("paging") or {}).get("next")
+        if not next_url:
+            return found
+        status, data = proxy("GET", next_url)
+
+
 def fetch_comments(media_id):
     comments = []
     status, data = proxy(
@@ -98,11 +136,11 @@ def fetch_comments(media_id):
     return comments
 
 
-def needs_reply(c):
+def needs_reply(c, keyword):
     author = (c.get("from") or {}).get("username") or c.get("username") or ""
     if author == OWN_USERNAME:
         return False
-    if KEYWORD not in (c.get("text") or "").lower():
+    if keyword.lower() not in (c.get("text") or "").lower():
         return False
     ts = datetime.strptime(c["timestamp"], "%Y-%m-%dT%H:%M:%S%z")
     if datetime.now(timezone.utc) - ts > timedelta(days=7):
@@ -113,7 +151,7 @@ def needs_reply(c):
     return True
 
 
-def handle(c):
+def handle(c, dm_text):
     user = (c.get("from") or {}).get("username") or c.get("username") or "?"
     cid = c["id"]
     if DRY_RUN:
@@ -122,7 +160,7 @@ def handle(c):
 
     status, data = proxy(
         "POST", f"{GRAPH}/me/messages",
-        body={"recipient": {"comment_id": cid}, "message": {"text": DM_TEXT}},
+        body={"recipient": {"comment_id": cid}, "message": {"text": dm_text}},
     )
     err = data.get("error") if isinstance(data, dict) else None
     if status == 200 and data.get("message_id"):
@@ -146,13 +184,25 @@ def main():
         sys.exit("Missing COMPOSIO_API_KEY or COMPOSIO_CONNECTED_ACCOUNT secret.")
     failures = 0
     try:
-        for media_id in MEDIA_IDS:
-            media_id = media_id.strip()
-            comments = fetch_comments(media_id)
-            todo = [c for c in comments if needs_reply(c)]
-            print(f"Post {media_id}: {len(comments)} comments, {len(todo)} new")
+        reels = fetch_reels()
+        print(f"Watching {len(reels)} reels")
+        for m in reels:
+            media_id = m["id"]
+            if not m.get("comments_count"):
+                continue  # no comments yet - skip the extra API call
+            try:
+                comments = fetch_comments(media_id)
+            except ConnectionExpired:
+                raise
+            except Exception as e:  # one broken reel must not stop the others
+                print(f"!! {m.get('permalink', media_id)}: {e}")
+                failures += 1
+                continue
+            todo = [c for c in comments if needs_reply(c, KEYWORD)]
+            print(f"{m.get('permalink', media_id)}: {len(comments)} comments, {len(todo)} new")
+            dm_text = CUSTOM_DM.get(media_id, DEFAULT_DM)
             for c in todo:
-                if not handle(c):
+                if not handle(c, dm_text):
                     failures += 1
     except ConnectionExpired as e:
         sys.exit(f"Instagram connection expired - reconnect Instagram in Composio. Details: {e}")
