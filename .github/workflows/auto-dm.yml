@@ -53,6 +53,8 @@ jobs:
           fails=0
           while [ $SECONDS -lt $end ]; do
             echo "=== Check at $(date -u '+%H:%M UTC') ==="
+            # pick up any edit to auto_dm.py made on GitHub since this run started
+            git fetch -q origin main && git checkout -q origin/main -- auto_dm.py || echo "(could not refresh script, using current copy)"
             if python auto_dm.py; then
               fails=0
             else
