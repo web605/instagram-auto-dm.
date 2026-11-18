@@ -45,6 +45,12 @@ CUSTOM_DM = {
         "Here’s your link: https://theschoolfest.com/blog/questions-to-ask-schools\n"
         "📅 The School Fest · 5–6 Dec · Activatrium, Satellite Road, Ahmedabad"
     ),
+    # "The School Fest ... how to compare schools | Guide" (17 Nov) sends the parent guide
+    "17965761393237970": (
+        "Hi! 👋 Thanks for your interest 🎓\n"
+        "Here’s your link: theschoolfest.com/blog/school-guide\n"
+        "Meet Ahmedabad’s top schools at The School Fest · 5–6 Dec, Stratum @ Venus Grounds. See you there!"
+    ),
 }
 
 OWN_USERNAME = "the.school.fest"
