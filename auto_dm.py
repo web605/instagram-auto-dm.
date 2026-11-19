@@ -55,6 +55,10 @@ CUSTOM_DM = {
 
 OWN_USERNAME = "the.school.fest"
 PUBLIC_REPLY = "Sent! Check your DMs 📩"
+# Posted instead when the person's account doesn't accept DMs from businesses
+CLOSED_DM_REPLY = "Hi! Register via the link in our bio 🎓"
+# A comment with a reply starting like this has already been handled
+HANDLED_PREFIXES = ("Sent! Check your DMs", "Hi! Register via the link in our bio")
 # ------------------------------
 
 GRAPH = "https://graph.instagram.com/v21.0"
@@ -152,7 +156,7 @@ def needs_reply(c, keyword):
     if datetime.now(timezone.utc) - ts > timedelta(days=7):
         return False  # Instagram only allows the DM within 7 days
     replies = (c.get("replies") or {}).get("data", [])
-    if any((r.get("text") or "").startswith("Sent! Check your DMs") for r in replies):
+    if any((r.get("text") or "").startswith(HANDLED_PREFIXES) for r in replies):
         return False  # already handled
     return True
 
@@ -175,15 +179,18 @@ def handle(c, dm_text):
         print(f"DM to @{user} was already sent earlier; adding the missing public reply")
     elif status == 403 or (err and err.get("code") in (200, 10, 551)):
         # This person's account can't receive DMs (closed DMs, blocked, deactivated).
-        # Not a breakdown: skip them and keep going. Retried on the next check
-        # in case they open their DMs.
-        print(f"-- @{user} can't receive DMs ({(err or {}).get('message', status)}); skipped")
-        return True
+        # Not a breakdown: point them to the link in bio with a public reply instead.
+        print(f"-- @{user} can't receive DMs ({(err or {}).get('message', status)}); replying with 'link in bio'")
+        return post_reply(cid, user, CLOSED_DM_REPLY)
     else:
         print(f"!! DM to @{user} failed: {status} {data}")
         return False
 
-    status, data = proxy("POST", f"{GRAPH}/{cid}/replies", query={"message": PUBLIC_REPLY})
+    return post_reply(cid, user, PUBLIC_REPLY)
+
+
+def post_reply(cid, user, text):
+    status, data = proxy("POST", f"{GRAPH}/{cid}/replies", query={"message": text})
     if status == 200 and data.get("id"):
         print(f"Public reply posted for @{user}")
         return True
