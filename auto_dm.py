@@ -156,7 +156,8 @@ def needs_reply(c, keyword):
     if datetime.now(timezone.utc) - ts > timedelta(days=7):
         return False  # Instagram only allows the DM within 7 days
     replies = (c.get("replies") or {}).get("data", [])
-    if any((r.get("text") or "").startswith(HANDLED_PREFIXES) for r in replies):
+    # "in" (not startswith) so hand-typed replies like "@name Sent! Check your DMs" count too
+    if any(p in (r.get("text") or "") for r in replies for p in HANDLED_PREFIXES):
         return False  # already handled
     return True
 
