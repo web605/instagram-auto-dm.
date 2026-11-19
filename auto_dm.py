@@ -173,6 +173,12 @@ def handle(c, dm_text):
         print(f"DM sent to @{user}")
     elif err and err.get("error_subcode") == ALREADY_REPLIED_SUBCODE:
         print(f"DM to @{user} was already sent earlier; adding the missing public reply")
+    elif status == 403 or (err and err.get("code") in (200, 10, 551)):
+        # This person's account can't receive DMs (closed DMs, blocked, deactivated).
+        # Not a breakdown: skip them and keep going. Retried on the next check
+        # in case they open their DMs.
+        print(f"-- @{user} can't receive DMs ({(err or {}).get('message', status)}); skipped")
+        return True
     else:
         print(f"!! DM to @{user} failed: {status} {data}")
         return False
