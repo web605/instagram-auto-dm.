@@ -222,8 +222,11 @@ def main():
             print(f"{m.get('permalink', media_id)}: {len(comments)} comments, {len(todo)} new")
             dm_text = CUSTOM_DM.get(media_id, DEFAULT_DM)
             for c in todo:
+                # A problem with one person (closed DMs, restricted replies, blocked us)
+                # is logged and retried next check, but never stops the automation.
+                # Only account-wide problems (below) count as failures.
                 if not handle(c, dm_text):
-                    failures += 1
+                    print("   (skipped this comment; will retry next check)")
     except ConnectionExpired as e:
         sys.exit(f"Instagram connection expired - reconnect Instagram in Composio. Details: {e}")
     if failures:
