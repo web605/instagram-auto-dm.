@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   actions: write            # lets the run start the next run
+  issues: write             # lets the bot flag unclear comments/DMs (GitHub emails you)
 
 concurrency:
   group: instagram-auto-dm  # only one run at a time
@@ -48,6 +49,7 @@ jobs:
           COMPOSIO_CONNECTED_ACCOUNT: ${{ secrets.COMPOSIO_CONNECTED_ACCOUNT }}
           COMPOSIO_USER_ID: ${{ secrets.COMPOSIO_USER_ID }}
           DRY_RUN: "false"
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           end=$((SECONDS + 330*60))
           fails=0
