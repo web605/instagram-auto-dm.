@@ -112,7 +112,12 @@ MAX_MEDIA = 50
 COMMENT_DAYS = 7          # Instagram allows the comment DM within 7 days
 DM_WINDOW_HOURS = 23      # Instagram allows DM replies within 24 hours
 DM_FLAG_DAYS = 3          # flag unanswered DMs we couldn't handle, up to this old
-GITHUB_USER = "web605"    # gets the email for each flag
+GITHUB_USER = "web605"    # gets the email if an Instagram flag can't be delivered
+# Flags (things the bot can't answer) are sent as an Instagram DM to this person.
+# Instagram only allows it within 24 hours of THEIR last message to @the.school.fest,
+# so they should message the account once a day. If the DM is blocked, the flag is emailed.
+FLAG_TO_USERNAME = "yakshahahaha"
+FLAG_TO_ID = "1142502155002031"
 
 GRAPH = "https://graph.instagram.com/v21.0"
 PROXY_URL = "https://backend.composio.dev/api/v3.1/tools/execute/proxy"
@@ -181,20 +186,53 @@ def account_dm_access_off(err):
 
 # ----------------------------------------------------------------- flags
 _flag_keys = None
+_dm_flag_keys = None
 
 
 def flag(key, title, body):
-    """Open a GitHub Issue (GitHub emails you). Each key is flagged only once."""
+    """Tell the team about something the bot can't answer. Each key is flagged only once:
+    Instagram DM to FLAG_TO_USERNAME first; email (GitHub Issue) only if Instagram blocks it."""
     print(f"🚩 FLAG: {title}")
+    if DRY_RUN:
+        return
+    try:
+        if _flag_by_instagram(key, title, body):
+            return
+    except Exception as e:
+        print(f"!! Instagram flag failed: {e}")
     try:
         _open_issue(key, title, body)
     except Exception as e:  # a flag problem must never stop the replies
         print(f"!! could not open flag issue: {e}")
 
 
+def _flag_by_instagram(key, title, body):
+    global _dm_flag_keys
+    if _dm_flag_keys is None:
+        _dm_flag_keys = set()
+        st, data = proxy("GET", f"{GRAPH}/me/conversations", query={
+            "platform": "instagram", "user_id": FLAG_TO_ID,
+            "fields": "messages.limit(100){message}"})
+        for conv in (data.get("data", []) if st == 200 else []):
+            for m in (conv.get("messages") or {}).get("data", []):
+                _dm_flag_keys.update(re.findall(r"ref: (\S+)", m.get("message") or ""))
+    if key in _dm_flag_keys:
+        return True  # already sent
+    text = f"🚩 School Fest bot needs you\n\n{title}\n\n{body.replace('**', '')}"
+    text = text[:900] + f"\n\nref: {key}"
+    st, res = proxy("POST", f"{GRAPH}/me/messages",
+                    body={"recipient": {"id": FLAG_TO_ID}, "message": {"text": text}})
+    if st == 200 and res.get("message_id"):
+        print(f"   flag sent to @{FLAG_TO_USERNAME} on Instagram")
+        _dm_flag_keys.add(key)
+        return True
+    print(f"   couldn't DM @{FLAG_TO_USERNAME} ({(res.get('error') or {}).get('message', st)}); emailing instead")
+    return False
+
+
 def _open_issue(key, title, body):
     global _flag_keys
-    if DRY_RUN or not GH_TOKEN or not GH_REPO:
+    if not GH_TOKEN or not GH_REPO:
         return
     api = f"https://api.github.com/repos/{GH_REPO}/issues"
     headers = {"Authorization": f"Bearer {GH_TOKEN}", "Accept": "application/vnd.github+json"}
@@ -353,8 +391,8 @@ def handle_dms(own_id):
         if not msgs:
             continue
         last = msgs[0]
-        if last["from"].get("id") == own_id:
-            continue  # we already answered
+        if last["from"].get("id") in (own_id, FLAG_TO_ID):
+            continue  # we already answered / it's our own team member
         text = (last.get("message") or "").strip()
         if not text:
             continue  # shared post / story mention / photo - nothing to answer
