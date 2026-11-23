@@ -46,9 +46,11 @@ DM = {
         f"📅 {WHEN}\n\nRegister free: {LINK}"
     ),
     "greeting": (
-        "Hi! 👋 Welcome to The School Fest 🎓 How can we help you today?\n\n"
-        "Meet Ahmedabad's top schools, all in one place.\n"
-        f"Registration is free 👉 {LINK}\n\n{DETAILS}"
+        "Hey, welcome to The School Fest! 😊🎓\n\n"
+        "So glad you reached out. Looking for the right school for your child? "
+        "Come meet Ahmedabad's top schools, all in one place, on 5–6 Dec at Stratum @ Venus Grounds.\n\n"
+        f"Entry is free, register here 👉 {LINK}\n\n"
+        "Got a question? Just reply, we're here to help 💛"
     ),
     "praise": (
         "Thank you so much! 💛\n"
