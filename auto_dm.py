@@ -92,6 +92,21 @@ PRAISE_REPLY = "Thank you! 💛 See you at The School Fest 🎓"
 CLOSED_DM_REPLY = "Hi! Register via the link in our bio 🎓"
 HANDLED_PREFIXES = ("Sent! Check your DMs", "Hi! Register via the link in our bio", "Thank you! 💛")
 
+# Emoji-only comments get matching emojis back (first group that matches wins).
+EMOJI_REPLIES = [
+    ("😂🤣😆😹😅", "😂😂🙌"),
+    ("😭🥹🥺😢", "🥹💛"),
+    ("❤♥💛💕💖💗💓💞🧡💜💙💚🤍😍🥰😘🫶", "🥰💛"),
+    ("🔥💯⚡", "🔥🔥🙌"),
+    ("🥳🎉🎊🎈", "🎉🥳"),
+    ("👏🙌👍💪🤝✨⭐🌟", "🙌✨"),
+    ("👀🤩😮😲😯", "👀✨"),
+    ("🎓📚🏫✏", "🎓📚✨"),
+]
+EMOJI_DEFAULT = "😊💛"
+EMOJI_FLAG = "😡🤬👎💩🙄😒😤"   # negative emojis get flagged, not answered
+EMOJI_REPLY_SET = {r for _, r in EMOJI_REPLIES} | {EMOJI_DEFAULT}
+
 # =================== How intent is detected ====================
 # Checked top to bottom; the first group that matches wins.
 INTENT_RULES = [
@@ -178,6 +193,20 @@ def detect_intent(text):
         if re.search(pattern, t):
             return intent
     return "flag"
+
+
+def emoji_only(text):
+    return bool((text or "").strip()) and not re.sub(r"[\\W_]+", "", text)
+
+
+def emoji_reply(text):
+    """Matching emojis for an emoji-only comment, or None if it looks negative."""
+    if any(ch in EMOJI_FLAG for ch in text):
+        return None
+    for group, reply in EMOJI_REPLIES:
+        if any(ch in group for ch in text):
+            return reply
+    return EMOJI_DEFAULT
 
 
 def account_dm_access_off(err):
@@ -302,6 +331,8 @@ def comment_is_new(c):
         return False
     replies = (c.get("replies") or {}).get("data", [])
     # "in" (not startswith) so hand-typed replies like "@name Sent! Check your DMs" count too
+    if any((r.get("text") or "").strip() in EMOJI_REPLY_SET for r in replies):
+        return False  # already answered with emojis
     return not any(p in (r.get("text") or "") for r in replies for p in HANDLED_PREFIXES)
 
 
@@ -321,6 +352,14 @@ def handle_comment(c, media):
     link = media.get("permalink", media["id"])
     print(f"   @{user}: {text[:60]!r} -> {intent}")
 
+    if emoji_only(text):
+        reply = emoji_reply(text)
+        if reply:
+            if DRY_RUN:
+                print(f"   [dry run] would reply publicly: {reply}")
+                return True
+            return post_reply(c["id"], user, reply)
+        intent = "flag"
     if intent == "flag":
         flag(f"comment-{c['id']}", f"🚩 Comment from @{user}: {text[:60]}",
              f"**Comment:** {text}\n**From:** @{user}\n**Post:** {link}\n\n"
