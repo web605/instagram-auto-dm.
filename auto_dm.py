@@ -196,7 +196,7 @@ def detect_intent(text):
 
 
 def emoji_only(text):
-    return bool((text or "").strip()) and not re.sub(r"[\\W_]+", "", text)
+    return bool((text or "").strip()) and not re.sub(r"[\W_]+", "", text)
 
 
 def emoji_reply(text):
