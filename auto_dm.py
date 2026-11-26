@@ -110,7 +110,7 @@ EMOJI_REPLY_SET = {r for _, r in EMOJI_REPLIES} | {EMOJI_DEFAULT}
 # =================== How intent is detected ====================
 # Checked top to bottom; the first group that matches wins.
 INTENT_RULES = [
-    ("flag", r"scam|fake|fraud|worst|complain|refund|cheat|not working|didn'?t get|did not get|not received|organi[sz]|which company|who is|which schools|schools? (are )?coming|list of schools|kaun ?s[ae]? school|will .{1,30} be there|admission|promot|advertis|our page|paid collab"),
+    ("flag", r"scam|fake|fraud|worst|complain|refund|cheat|not working|didn'?t get|did not get|not received|organi[sz]|which company|who is|which (all )?schools|schools? (are )?coming|list of schools|kaun ?s[ae]? school|will .{1,30} be there|admission|promot|advertis|our page|paid collab"),
     ("partner_school", r"participat|as a school|our school|my school|school owner|principal|trustee"),
     ("partner_brand", r"stall|booth|display|our products?|brand|sponsor|collab|exhibit|vendor|partner"),
     ("price", r"price|fees?|cost|free|ticket|charges?|paid|kitn[ae]|entry|₹|\brs\b|rupees?"),
@@ -118,7 +118,7 @@ INTENT_RULES = [
     ("venue", r"venue|where|kaha+n?|location|address|\bplace|map|jagah"),
     ("register", r"regist|link|sign ?up|\bbook|\bpass\b|join|details|info|interested|\bschool|\bsend|\bshare|\bdm\b|how to"),
     ("greeting", r"^\W*(hi+|hello+|hey+|helo|hlo|namaste|namaskar|hii+)\b"),
-    ("praise", r"love|great|nice|awesome|amazing|wow|looking forward|excited|super|good|congrat|best|thank|👏|🔥|❤|😍|🥳|🙌"),
+    ("praise", r"love|great|nice|cool|awesome|amazing|wow|looking forward|excited|super|good|congrat|best|thank|👏|🔥|❤|😍|🥳|🙌"),
 ]
 
 OWN_USERNAME = "the.school.fest"
@@ -225,6 +225,11 @@ def flag(key, title, body):
     if DRY_RUN:
         return
     try:
+        if key in _load_issue_keys():
+            return  # already emailed earlier
+    except Exception:
+        pass
+    try:
         if _flag_by_instagram(key, title, body):
             return
     except Exception as e:
@@ -259,10 +264,10 @@ def _flag_by_instagram(key, title, body):
     return False
 
 
-def _open_issue(key, title, body):
+def _load_issue_keys():
     global _flag_keys
     if not GH_TOKEN or not GH_REPO:
-        return
+        return set()
     api = f"https://api.github.com/repos/{GH_REPO}/issues"
     headers = {"Authorization": f"Bearer {GH_TOKEN}", "Accept": "application/vnd.github+json"}
     if _flag_keys is None:
@@ -274,7 +279,15 @@ def _open_issue(key, title, body):
             _flag_keys.update(re.findall(r"flag-key: (\S+)", " ".join((i.get("body") or "") for i in items)))
             if len(items) < 100:
                 break
-    if key in _flag_keys:
+    return _flag_keys
+
+
+def _open_issue(key, title, body):
+    if not GH_TOKEN or not GH_REPO:
+        return
+    api = f"https://api.github.com/repos/{GH_REPO}/issues"
+    headers = {"Authorization": f"Bearer {GH_TOKEN}", "Accept": "application/vnd.github+json"}
+    if key in _load_issue_keys():
         return
     full = f"{body}\n\n@{GITHUB_USER} please check this one.\n\n<!-- flag-key: {key} -->"
     req = urllib.request.Request(
