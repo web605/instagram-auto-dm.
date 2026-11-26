@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 # =================== Event facts (edit here) ===================
 LINK = "https://theschoolfest.com/"
 WHEN = "5–6 Dec (Sat–Sun) · 10 AM–7 PM"
-WHERE = "Activatrium, Level 4, Stratum @ Venus Grounds, Satellite Road, Ahmedabad"
+WHERE = "Activatrium, Venus Grounds, Nehru Nagar, Ahmedabad"
 DETAILS = f"📅 {WHEN}\n📍 {WHERE}"
 
 # =================== Messages per intent =======================
@@ -48,7 +48,7 @@ DM = {
     "greeting": (
         "Hey, welcome to The School Fest! 😊🎓\n\n"
         "So glad you reached out. Looking for the right school for your child? "
-        "Come meet Ahmedabad's top schools, all in one place, on 5–6 Dec at Stratum @ Venus Grounds.\n\n"
+        "Come meet Ahmedabad's top schools, all in one place, on 5–6 Dec at Activatrium, Venus Grounds, Nehru Nagar.\n\n"
         f"Entry is free, register here 👉 {LINK}\n\n"
         "Got a question? Just reply, we're here to help 💛"
     ),
@@ -78,12 +78,12 @@ CUSTOM_DM = {
     "18095984435689718": (
         "Hi! 👋 Thanks for commenting 🎓\n"
         "Here’s your link: https://theschoolfest.com/blog/questions-to-ask-schools\n"
-        "📅 The School Fest · 5–6 Dec · Activatrium, Satellite Road, Ahmedabad"
+        "📅 The School Fest · 5–6 Dec · Activatrium, Venus Grounds, Nehru Nagar, Ahmedabad"
     ),
     "17965761393237970": (
         "Hi! 👋 Thanks for your interest 🎓\n"
         "Here’s your link: theschoolfest.com/blog/school-guide\n"
-        "Meet Ahmedabad’s top schools at The School Fest · 5–6 Dec, Stratum @ Venus Grounds. See you there!"
+        "Meet Ahmedabad’s top schools at The School Fest · 5–6 Dec, Activatrium, Venus Grounds, Nehru Nagar. See you there!"
     ),
 }
 
